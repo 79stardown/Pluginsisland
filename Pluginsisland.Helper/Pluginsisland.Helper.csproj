@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- WinExe：双击 .cipx 时不闪现控制台窗口；错误提示经 MessageBox 显示 -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Pluginsisland.Helper</AssemblyName>
+    <RootNamespace>Pluginsisland.Helper</RootNamespace>
+    <!-- 图标同时嵌入 exe 与复制到输出目录，供 .cipx 文件关联的 DefaultIcon 使用 -->
+    <ApplicationIcon>App.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="App.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

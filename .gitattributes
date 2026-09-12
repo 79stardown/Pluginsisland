@@ -1,0 +1,11 @@
+# 由 git 统一规范化换行：仓库内存 LF，检出时按平台还原（避免 CRLF/LF 混用造成的无谓 diff）
+* text=auto
+
+# 解决方案文件必须为 CRLF，否则 Visual Studio 解析异常
+*.sln text eol=crlf
+
+# ---- 二进制资源，禁止任何换行转换 ----
+*.ico binary
+*.png binary
+*.cipx binary
+*.dll binary

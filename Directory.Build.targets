@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- 本机未安装 PowerShell 7 (pwsh)；SDK 的 MD5 生成脚本兼容 Windows PowerShell 5.1，改用 powershell -->
+    <PowershellBinaryName>powershell</PowershellBinaryName>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,53 @@
+<UserControl
+    x:Class="Xinxia.Pluginsisland.Views.PluginBlock"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="clr-namespace:Xinxia.Pluginsisland.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    d:DesignWidth="640"
+    mc:Ignorable="d">
+    <UserControl.Resources>
+        <conv:StringToBitmapConverter x:Key="IconConv" />
+    </UserControl.Resources>
+    <Expander IsExpanded="False">
+        <Expander.Header>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Image
+                    Width="32"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    Source="{Binding Info.RealIconPath, Converter={StaticResource IconConv}}" />
+                <StackPanel VerticalAlignment="Center" Spacing="2">
+                    <TextBlock FontWeight="Medium" Text="{Binding Info.Manifest.Name}" />
+                    <TextBlock Classes="l-secondary" Text="{Binding VersionAndAuthor}" />
+                </StackPanel>
+                <TextBlock
+                    VerticalAlignment="Center"
+                    Classes="l-secondary"
+                    Text="{Binding StatusText}" />
+            </StackPanel>
+        </Expander.Header>
+        <StackPanel Margin="4,8,4,4" Spacing="8">
+            <TextBlock
+                Classes="l-secondary"
+                IsVisible="{Binding IsError}"
+                Text="{Binding ErrorText}"
+                TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <ToggleSwitch
+                    Content="启用"
+                    IsChecked="{Binding Info.IsEnabled, Mode=TwoWay}" />
+                <Button
+                    Click="ButtonUninstall_OnClick"
+                    IsVisible="{Binding !Info.IsUninstalling}">卸载</Button>
+                <Button
+                    Click="ButtonUndoUninstall_OnClick"
+                    IsVisible="{Binding Info.IsUninstalling}">取消卸载</Button>
+            </StackPanel>
+            <TextBlock
+                Classes="l-secondary"
+                IsVisible="{Binding Info.RestartRequired}">设置将在重启 ClassIsland 后生效</TextBlock>
+        </StackPanel>
+    </Expander>
+</UserControl>

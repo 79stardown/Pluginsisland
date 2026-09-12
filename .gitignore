@@ -1,0 +1,18 @@
+# ---- 构建产物 ----
+bin/
+obj/
+# 由 CreateCipx 目标生成的插件包与校验和
+Xinxia.Pluginsisland/cipx/
+
+# ---- IDE / 编辑器 ----
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userprefs
+
+# ---- 操作系统 ----
+Thumbs.db
+desktop.ini
+.DS_Store
