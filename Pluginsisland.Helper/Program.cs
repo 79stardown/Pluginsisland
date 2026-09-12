@@ -15,6 +15,15 @@ internal static class Program
     private const string AuthorKey = @"Software\xinxia.pluginsisland";
     private const string MutexName = @"Global\ClassIsland.Lock";
 
+    /// <summary>官方「插件」设置页之 URI。与 Xinxia.Pluginsisland 中的同名常量须保持一致
+    /// （helper 不能反向引用插件工程，否则形成循环引用）。</summary>
+    private const string PluginsSettingsUri = "classisland://app/settings/classisland.plugins";
+
+    /// <summary>「安装后自动打开插件页」开关之值名，存于 <see cref="AuthorKey"/> 之下，
+    /// 取值 <c>"1"</c>/<c>"0"</c>，**缺省（值不存在）即关**。
+    /// 须与插件 InstallOptionsService.AutoOpenValueName 一致。</summary>
+    private const string AutoJumpValueName = "AutoOpenPluginsPage";
+
     private static readonly IntPtr Hkcu = new(0x80000001);
     private const int RegSz = 1;
     private const int KeyRead = 0x20019;
@@ -36,6 +45,7 @@ internal static class Program
                 "--register" => Register(GetArgValue(args, "--ci-root")),
                 "--unregister" => Unregister(),
                 "--install" => Install(GetArgValue(args, "--install")),
+                "--set-auto-jump" => SetAutoJump(GetArgValue(args, "--set-auto-jump")),
                 _ => Install(args[0]),
             };
         }
@@ -109,6 +119,21 @@ internal static class Program
         return 0;
     }
 
+    // ---------- 安装行为开关 ----------
+
+    /// <summary>
+    /// 设定「安装后自动打开插件页」，由插件设置页的开关调用。**静默**：成功时不弹提示框，
+    /// 否则每次拨动开关都会蹦一个窗。
+    /// </summary>
+    private static int SetAutoJump(string? value)
+    {
+        SetValue(AuthorKey, AutoJumpValueName, value == "1" ? "1" : "0");
+        return 0;
+    }
+
+    /// <summary>读「安装后自动打开插件页」；值不存在即 false（默认关）。</summary>
+    private static bool GetAutoJump() => GetValue(AuthorKey, AutoJumpValueName) == "1";
+
     // ---------- 安装 ----------
 
     private static int Install(string? filePath)
@@ -157,14 +182,33 @@ internal static class Program
         }
         else
         {
-            // 分支 B：CI 未运行。直接启动，CI 启动早期会处理缓存中的插件包。
+            // 分支 B：CI 未运行。
+            //
+            // ⚠ 提示框必须弹在启动 CI **之前**，此顺序不可调换。
+            // helper 自身就住在插件目录里（即 <CI>\data\Plugins\xinxia.pluginsisland\），进程存活
+            // 期间 Windows 锁着 Pluginsisland.Helper.exe / .dll。而 CI 装包走的是
+            // PluginService.ProcessPluginsInstall：
+            //     Directory.Delete(插件目录, recursive: true)
+            //   → Directory.CreateDirectory
+            //   → ZipFile.ExtractToDirectory
+            // 删到上述被占用的文件时抛异常，其后两步一概不执行：目录已被删剩一半、插件当场报废。
+            // 更糟的是该异常只被 Console.WriteLine 吞掉（不进日志文件），且紧随其后的
+            // File.Delete(pkg) 照样执行——包也被删了，事后毫无线索可查。
+            // 故先把提示框弹完；用户点掉后本进程随即退出、占用释放，CI 才开始启动，
+            // 而 CI 从启动到执行装包有数秒之遥，届时占用早已不存在。
+            Msg($"已暂存插件「{package}」{(string.IsNullOrEmpty(version) ? "" : " " + version)}（{id}），ClassIsland 即将启动并安装。", "Pluginsisland 安装助手");
+
+            // 是否顺带 --uri 跳到插件页，取决于插件设置页里的开关（默认关）；
+            // 打开时由 CI 在 MainWindow.PostInit 末尾处理 --uri，于是装完即落在插件页上。
+            // （双击 .cipx 本身即是同意安装，此处无需再弹确认框。）
+            var autoJump = GetAutoJump();
             Process.Start(new ProcessStartInfo
             {
                 FileName = ciExe,
                 WorkingDirectory = ciRoot!,
                 UseShellExecute = true,
+                Arguments = autoJump ? $"--uri \"{PluginsSettingsUri}\"" : "",
             });
-            Msg($"已暂存插件「{package}」{(string.IsNullOrEmpty(version) ? "" : " " + version)}（{id}），ClassIsland 正在启动并安装。", "Pluginsisland 安装助手");
         }
         return 0;
     }

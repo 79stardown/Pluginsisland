@@ -7,6 +7,10 @@
     <CreateCipx>true</CreateCipx>
     <AssemblyName>Xinxia.Pluginsisland</AssemblyName>
     <RootNamespace>Xinxia.Pluginsisland</RootNamespace>
+    <!-- 须与 manifest.yml 的 version 一同递增。ClassIsland 显示的是 manifest.yml 那一份，
+         此处仅令 DLL 自身带版本（右键属性可查），便于日后据版本号排查问题。 -->
+    <Version>1.0.1.0</Version>
+    <FileVersion>1.0.1.0</FileVersion>
     <!-- ClassIsland.PluginSdk 2.1.1.x 仅支持 net10.0（会 NU1202），此处锁 2.1.0.1 以匹配 ClassIsland 2.1.0.1 -->
   </PropertyGroup>
   <ItemGroup>

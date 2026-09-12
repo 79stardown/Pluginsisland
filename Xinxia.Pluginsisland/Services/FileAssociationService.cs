@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
 using ClassIsland.Core;
 using ClassIsland.Core.Abstractions.Services;
 
@@ -59,41 +57,4 @@ public sealed class FileAssociationService
 
     public bool IsRegistered() =>
         File.Exists(HelperPath) && RegistryProbe.GetDefaultValue(@"Software\Classes\.cipx") == ProgId;
-
-    /// <summary>极简注册表读取（仅查询默认值），advapi32 P/Invoke。</summary>
-    private static class RegistryProbe
-    {
-        private static readonly IntPtr Hkcu = new(0x80000001);
-        private const int KeyRead = 0x20019;
-
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
-        private static extern int RegOpenKeyEx(IntPtr hKey, string lpSubKey, int ulOptions, int samDesired, out IntPtr phkResult);
-
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
-        private static extern int RegQueryValueEx(IntPtr hKey, string? lpValueName, IntPtr lpReserved, out int lpType, byte[]? lpData, ref int lpcbData);
-
-        [DllImport("advapi32.dll")]
-        private static extern int RegCloseKey(IntPtr hKey);
-
-        public static string? GetDefaultValue(string subKey)
-        {
-            if (RegOpenKeyEx(Hkcu, subKey, 0, KeyRead, out var key) != 0)
-                return null;
-            try
-            {
-                var size = 0;
-                if (RegQueryValueEx(key, null, IntPtr.Zero, out _, null, ref size) != 0)
-                    return null;
-                var data = new byte[size];
-                if (RegQueryValueEx(key, null, IntPtr.Zero, out _, data, ref size) != 0)
-                    return null;
-                var len = size >= 2 ? size - 2 : 0;
-                return Encoding.Unicode.GetString(data, 0, len);
-            }
-            finally
-            {
-                RegCloseKey(key);
-            }
-        }
-    }
 }

@@ -18,10 +18,11 @@ public partial class PluginsislandSettingsPage : SettingsPageBase
     private readonly FileAssociationService _fileAssoc;
     private readonly PluginManagerViewModel _vm;
 
-    public PluginsislandSettingsPage(PluginsislandRuntime runtime, FileAssociationService fileAssoc)
+    public PluginsislandSettingsPage(
+        PluginsislandRuntime runtime, FileAssociationService fileAssoc, InstallOptionsService options)
     {
         _fileAssoc = fileAssoc;
-        _vm = new PluginManagerViewModel(runtime, fileAssoc) { Page = this };
+        _vm = new PluginManagerViewModel(runtime, fileAssoc, options) { Page = this };
         DataContext = _vm;
         InitializeComponent();
         Loaded += OnLoaded;
@@ -31,6 +32,7 @@ public partial class PluginsislandSettingsPage : SettingsPageBase
     {
         _vm.Refresh();
         _vm.RefreshAssociationState();
+        _vm.RefreshAutoOpenState();
     }
 
     /// <summary>供 PluginBlock 调用：弹官方「需要重启」对话框。</summary>

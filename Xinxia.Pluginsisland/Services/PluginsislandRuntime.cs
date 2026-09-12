@@ -5,10 +5,10 @@ using ClassIsland.Core.Abstractions;
 using ClassIsland.Core.Abstractions.Services;
 using ClassIsland.Core.Attributes;
 using ClassIsland.Core.Enums.SettingsWindow;
-using ClassIsland.Core.Helpers.UI;
 using ClassIsland.Core.Models.UriNavigation;
 using ClassIsland.Core.Services.Registry;
 using ClassIsland.Shared;
+using FluentAvalonia.UI.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -29,9 +29,34 @@ public sealed class PluginsislandRuntime
     /// <summary>「插件管理」导航分组 id（须与 Plugin.cs 中 AddSettingsPageGroup 之调用一致）。</summary>
     public const string ManageGroupId = "xinxia.pluginsisland.manage";
 
+    /// <summary>官方「插件」设置页之 URI（取自 ClassIsland 自身所用之字面量）。</summary>
+    public const string PluginsSettingsUri = "classisland://app/settings/classisland.plugins";
+
+    /// <summary>
+    /// 重启以完成安装之启动参数。是否顺带跳到官方插件页，取决于设置页的
+    /// 「安装后自动打开插件页」开关（<see cref="InstallOptionsService.AutoOpenPluginsPage"/>，默认关）。
+    /// <para>
+    /// <c>-m</c>（<c>--waitMutex</c>）不可省：<c>Restart</c> 是先 <c>Stop()</c> 再起新进程，
+    /// 旧实例未必已释放互斥体；不带 <c>-m</c> 时新进程会认作「第二实例」，
+    /// 把 <c>--uri</c> 转发给正在退出的旧进程后自杀，重启即静默失败。
+    /// ClassIsland 自带的 <c>Restart()</c> 同样恒带 <c>-m</c>。故无 <c>--uri</c> 时也须单留 <c>-m</c>。
+    /// </para>
+    /// <para>
+    /// <c>--uri</c> 由新实例在 <c>MainWindow.PostInit</c> 末尾处理（<c>NavigateWrapped</c>），
+    /// 故冷启动亦会跳转——这正是「安装完自动打开插件页」之所依。
+    /// </para>
+    /// </summary>
+    private string[] BuildRestartArgs() => _options.AutoOpenPluginsPage
+        ? new[] { "-m", "--uri", PluginsSettingsUri }
+        : new[] { "-m" };
+
     /// <summary>他插件设置页之 GroupId 为 internal setter，唯有反射可设。</summary>
     private static readonly PropertyInfo? GroupIdProperty = typeof(SettingsPageInfo).GetProperty(
         "GroupId", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+    private readonly InstallOptionsService _options;
+
+    public PluginsislandRuntime(InstallOptionsService options) => _options = options;
 
     private bool _uriRegistered;
     private bool _groupingHooked;
@@ -224,6 +249,8 @@ public sealed class PluginsislandRuntime
     {
         try
         {
+            Logger?.LogInformation("Pluginsisland: 收到安装导航请求 {Uri}。", args.Uri);
+
             var query = args.Uri.Query.TrimStart('?');
             string? package = null;
             foreach (var part in query.Split('&'))
@@ -233,41 +260,103 @@ public sealed class PluginsislandRuntime
                     package = Uri.UnescapeDataString(kv[1]);
             }
             if (string.IsNullOrWhiteSpace(package))
+            {
+                Logger?.LogWarning("Pluginsisland: 安装请求缺少 package 参数，已忽略。");
                 return;
+            }
 
             var pkgPath = Path.Combine(CachePkgDir, package);
             if (!File.Exists(pkgPath))
-                return;
-
-            string? id = null, name = null, version = null;
-            using (var zip = ZipFile.OpenRead(pkgPath))
             {
-                var entry = zip.GetEntry("manifest.yml");
-                if (entry is not null)
-                using (var reader = new StreamReader(entry.Open()))
-                {
-                    while (reader.ReadLine() is { } line)
-                    {
-                        var t = line.Trim();
-                        if (t.StartsWith("id:", StringComparison.OrdinalIgnoreCase)) id = TrimYaml(t["id:".Length..]);
-                        else if (t.StartsWith("name:", StringComparison.OrdinalIgnoreCase)) name = TrimYaml(t["name:".Length..]);
-                        else if (t.StartsWith("version:", StringComparison.OrdinalIgnoreCase)) version = TrimYaml(t["version:".Length..]);
-                    }
-                }
+                Logger?.LogWarning("Pluginsisland: 待装插件包不存在：{Path}", pkgPath);
+                return;
             }
 
-            var ok = await ContentDialogHelper.ShowConfirmationDialog(
-                "安装插件",
-                $"即将安装插件「{name ?? package}」{(string.IsNullOrEmpty(version) ? "" : " " + version)}（{id ?? "未知"}）。\n" +
-                "确认后 ClassIsland 将重启以完成安装；\n若选择取消，该插件包将在下次启动 ClassIsland 时自动安装。",
-                root: AppBase.Current.GetRootWindow());
-            if (ok)
-                AppBase.Current.Restart();
+            var (id, name, version) = ReadPackageManifest(pkgPath);
+            var title = string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(package) : name;
+            Logger?.LogInformation("Pluginsisland: 待装插件「{Name}」{Version}（{Id}），包={Package}", title, version ?? "(无版本)", id ?? "(未知)", package);
+
+            var confirmed = await ShowInstallConfirmationAsync(title, id, version);
+            Logger?.LogInformation("Pluginsisland: 用户在安装确认框选择了「{Choice}」。", confirmed ? "确认" : "取消");
+
+            if (confirmed)
+            {
+                Logger?.LogInformation(
+                    "Pluginsisland: 重启以完成安装（自动打开插件页={AutoOpen}）。", _options.AutoOpenPluginsPage);
+                AppBase.Current.Restart(BuildRestartArgs());
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // IPC 通道无回执且调用方已吞异常，此处静默——插件包已在缓存，下次启动必装
+            // 不吞异常：IPC 通道无回执，日志是唯一的线索。插件包已在缓存，下次启动仍会自动安装。
+            Logger?.LogError(ex, "Pluginsisland: 处理安装导航请求时出错。");
         }
+    }
+
+    /// <summary>
+    /// 弹「确认/取消」二选一对话框。
+    /// <para>
+    /// 用 FluentAvalonia 的 <see cref="TaskDialog"/>（自带宿主），**不可**用
+    /// <c>ContentDialogHelper.ShowConfirmationDialog</c>——后者内部是
+    /// <c>ContentDialog.ShowAsync(TopLevel)</c>，要求目标窗口的视觉树里存在
+    /// <c>ContentDialogHost</c>，而主窗口并没有；<c>ShowAsync</c> 会抛
+    /// <c>InvalidOperationException</c>，表现为「双击 .cipx 后毫无反应」。
+    /// 且该辅助方法未传按钮文案时 <c>PrimaryButtonText</c>/<c>CloseButtonText</c> 皆为 null，
+    /// 即便能显示也没有按钮。
+    /// </para>
+    /// <para>
+    /// 此处照抄 ClassIsland 自身于 <c>CommonTaskDialogs.ShowDialog</c> 及
+    /// <c>UriNavigationService.NavigateWrapped</c> 异常分支中的写法——二者都在同样的
+    /// UI 线程上下文里以此法成功弹窗（<c>Navigate</c>/<c>NavigateWrapped</c> 由
+    /// <c>Dispatcher.UIThread.Invoke</c> 包裹，故本处理函数即在 UI 线程）。
+    /// </para>
+    /// </summary>
+    private async Task<bool> ShowInstallConfirmationAsync(string title, string? id, string? version)
+    {
+        var root = AppBase.Current.GetRootWindow();
+        if (root is null)
+        {
+            Logger?.LogWarning("Pluginsisland: 主窗口不可用，无法显示安装确认框。");
+            return false;
+        }
+
+        // 文案须与 BuildRestartArgs 的实际行为一致：开关关着就别承诺会打开插件页
+        var outcome = _options.AutoOpenPluginsPage
+            ? "确认后 ClassIsland 将立即重启以完成安装，并打开插件页；"
+            : "确认后 ClassIsland 将立即重启以完成安装；";
+        var text = $"即将安装插件「{title}」{(string.IsNullOrEmpty(version) ? "" : " " + version)}（{id ?? "未知"}）。\n" +
+                   outcome + "\n" +
+                   "若选择取消，该插件包将在下次启动 ClassIsland 时自动安装。";
+
+        var dialog = new TaskDialog
+        {
+            Header = "安装插件",
+            Content = text,
+            XamlRoot = root,
+        };
+        dialog.Buttons.Add(new TaskDialogButton("取消", false));
+        dialog.Buttons.Add(new TaskDialogButton("重启并安装", true) { IsDefault = true });
+
+        // ReSharper disable once RedundantBoolCompare —— 回执是装箱的 object，须模式匹配
+        return await dialog.ShowAsync(false) is true;
+    }
+
+    private static (string? Id, string? Name, string? Version) ReadPackageManifest(string pkgPath)
+    {
+        string? id = null, name = null, version = null;
+        using var zip = ZipFile.OpenRead(pkgPath);
+        var entry = zip.GetEntry("manifest.yml");
+        if (entry is null)
+            return (null, null, null);
+        using var reader = new StreamReader(entry.Open());
+        while (reader.ReadLine() is { } line)
+        {
+            var t = line.Trim();
+            if (t.StartsWith("id:", StringComparison.OrdinalIgnoreCase)) id = TrimYaml(t["id:".Length..]);
+            else if (t.StartsWith("name:", StringComparison.OrdinalIgnoreCase)) name = TrimYaml(t["name:".Length..]);
+            else if (t.StartsWith("version:", StringComparison.OrdinalIgnoreCase)) version = TrimYaml(t["version:".Length..]);
+        }
+        return (id, name, version);
     }
 
     private static string TrimYaml(string s) => s.Trim().Trim('"', '\'');

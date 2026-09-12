@@ -32,6 +32,13 @@
                         <ToggleSwitch IsChecked="{Binding IsAssociationRegistered, Mode=TwoWay}" />
                     </controls:SettingsExpanderItem.Footer>
                 </controls:SettingsExpanderItem>
+                <controls:SettingsExpanderItem
+                    Content="安装后自动打开插件页"
+                    Description="默认关：装完仅重启回原样。开启则重启后自动跳到官方插件页">
+                    <controls:SettingsExpanderItem.Footer>
+                        <ToggleSwitch IsChecked="{Binding IsAutoOpenPluginsPage, Mode=TwoWay}" />
+                    </controls:SettingsExpanderItem.Footer>
+                </controls:SettingsExpanderItem>
             </controls:SettingsExpander>
 
             <ItemsControl ItemsSource="{Binding Plugins}">

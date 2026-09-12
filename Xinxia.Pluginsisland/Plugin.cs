@@ -23,6 +23,7 @@ public class Plugin : PluginBase
         services.AddSettingsPage<PluginsislandSettingsPage>();
         services.AddSingleton<PluginsislandRuntime>();
         services.AddSingleton<FileAssociationService>();
+        services.AddSingleton<InstallOptionsService>();
 
         // 挂钩 AppStarted：此时全部插件 Initialize 已执行、IAppHost.Host 已可用、且在 UI 线程。
         // （Initialize 阶段宿主尚未构建，严禁解析任何服务。）

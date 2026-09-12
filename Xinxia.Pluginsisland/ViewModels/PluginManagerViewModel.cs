@@ -9,6 +9,7 @@ public sealed class PluginManagerViewModel : ObservableObjectMini
 {
     private readonly PluginsislandRuntime _runtime;
     private readonly FileAssociationService _fileAssoc;
+    private readonly InstallOptionsService _options;
 
     public ObservableCollection<PluginEntryViewModel> Plugins { get; } = new();
 
@@ -31,16 +32,38 @@ public sealed class PluginManagerViewModel : ObservableObjectMini
         }
     }
 
-    public PluginManagerViewModel(PluginsislandRuntime runtime, FileAssociationService fileAssoc)
+    /// <summary>安装后是否自动跳到官方插件页。值一经改动即写入注册表（经 helper），
+    /// 是以此处不另存副本、每次进设置页都从注册表重读。</summary>
+    private bool _isAutoOpenPluginsPage;
+    public bool IsAutoOpenPluginsPage
+    {
+        get => _isAutoOpenPluginsPage;
+        set
+        {
+            if (SetProperty(ref _isAutoOpenPluginsPage, value))
+                _options.AutoOpenPluginsPage = value;
+        }
+    }
+
+    public PluginManagerViewModel(
+        PluginsislandRuntime runtime, FileAssociationService fileAssoc, InstallOptionsService options)
     {
         _runtime = runtime;
         _fileAssoc = fileAssoc;
+        _options = options;
     }
 
     public void RefreshAssociationState()
     {
         _isAssociationRegistered = _fileAssoc.IsRegistered();
         OnPropertyChanged(nameof(IsAssociationRegistered));
+    }
+
+    /// <summary>直赋后备字段而非走属性，免得回写注册表。</summary>
+    public void RefreshAutoOpenState()
+    {
+        _isAutoOpenPluginsPage = _options.AutoOpenPluginsPage;
+        OnPropertyChanged(nameof(IsAutoOpenPluginsPage));
     }
 
     public void Refresh()

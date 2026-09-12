@@ -3,4 +3,21 @@
     <!-- 本机未安装 PowerShell 7 (pwsh)；SDK 的 MD5 生成脚本兼容 Windows PowerShell 5.1，改用 powershell -->
     <PowershellBinaryName>powershell</PowershellBinaryName>
   </PropertyGroup>
+
+  <!--
+    dotnet publish 会在输出目录下再生成一个 publish\ 子目录，而 SDK 的 CreateCipx 目标用
+      <ZipDirectory SourceDirectory="$(OutputPath)" ...>
+    **递归**打包整个输出目录、且不支持任何排除项——于是那份陈旧副本（含旧版 DLL 与重复的
+    manifest.yml）会被原样塞进 .cipx。打包前清掉它。bin 下的 publish 只是可再生成的产物，删之无碍。
+    （项目未定义 CreateCipx 时本目标不会触发。）
+  -->
+  <Target Name="StripPublishFolderFromOutput" BeforeTargets="CreateCipx">
+    <ItemGroup>
+      <_StrayPublishDir Include="$(TargetDir)publish" Condition="Exists('$(TargetDir)publish')" />
+    </ItemGroup>
+    <Message Condition="'@(_StrayPublishDir)' != ''"
+             Text="打包前清除输出目录中的 publish\ 残留（不应进 .cipx）：@(_StrayPublishDir)"
+             Importance="high" />
+    <RemoveDir Directories="@(_StrayPublishDir)" />
+  </Target>
 </Project>
