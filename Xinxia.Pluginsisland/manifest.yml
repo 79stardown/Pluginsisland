@@ -5,3 +5,6 @@ entranceAssembly: "Xinxia.Pluginsisland.dll"
 apiVersion: 2.0.0.0
 version: 1.0.0.0
 author: "79stardown"
+repoOwner: 79stardown
+repoName: Pluginsisland
+assetsRoot: main/Xinxia.Pluginsisland
